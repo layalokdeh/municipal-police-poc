@@ -20,7 +20,8 @@
     <string name="shift_missions_button">المهام</string>
     <string name="shift_panic_button">اضغط مطولًا ثانيتين للاستغاثة</string>
     <string name="shift_end_button">إنهاء الدوام</string>
-    <string name="shift_last_synced">آخر مزامنة قبل %1$s</string>
+    <string name="shift_last_synced">آخر مزامنة: %1$s</string>
+    <string name="shift_not_synced_yet">لم تتم المزامنة بعد في هذا الدوام</string>
     <string name="shift_saved_on_phone">محفوظ على هذا الهاتف</string>
     <string name="shift_saved_detail">%1$d موقعًا و%2$d صورة سيُرفعان عند عودة الإشارة.</string>
     <string name="shift_uploading_title">جارٍ رفع البيانات المحفوظة</string>

@@ -15,6 +15,8 @@ public class PrefsManager {
     private static final String KEY_USER_BADGE = "user_badge_number";
     private static final String KEY_USER_ID = "user_id";
     private static final String KEY_SHIFT_ACTIVE = "shift_active";
+    private static final String KEY_SHIFT_START_TIME = "shift_start_time";
+    private static final String KEY_LAST_SYNC_TIME = "last_sync_time";
 
     private final SharedPreferences prefs;
 
@@ -80,6 +82,22 @@ public class PrefsManager {
 
     public void setShiftActive(boolean active) {
         prefs.edit().putBoolean(KEY_SHIFT_ACTIVE, active).apply();
+    }
+
+    public long getShiftStartTime() {
+        return prefs.getLong(KEY_SHIFT_START_TIME, 0);
+    }
+
+    public void setShiftStartTime(long startTime) {
+        prefs.edit().putLong(KEY_SHIFT_START_TIME, startTime).apply();
+    }
+
+    public long getLastSyncTime() {
+        return prefs.getLong(KEY_LAST_SYNC_TIME, 0);
+    }
+
+    public void setLastSyncTime(long syncTime) {
+        prefs.edit().putLong(KEY_LAST_SYNC_TIME, syncTime).apply();
     }
 
     public void clear() {

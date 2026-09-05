@@ -62,6 +62,8 @@ interface Mission {
   assignedTo: string;
   badge: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
   created: string;
   description?: string;
   officerNotes?: string;
@@ -600,6 +602,8 @@ export default function MainDashboard() {
       assignedTo: assignedName,
       badge: assignedBadge,
       address: newMissionAddress,
+      latitude: selectedCoords[0],
+      longitude: selectedCoords[1],
       created: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       description: newMissionDescription,
       officerNotes: 'Mission created and awaiting update.',

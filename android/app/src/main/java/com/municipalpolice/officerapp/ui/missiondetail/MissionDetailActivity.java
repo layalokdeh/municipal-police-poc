@@ -20,7 +20,17 @@ import android.widget.ViewFlipper;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+
+import org.osmdroid.config.Configuration;
+import org.osmdroid.library.BuildConfig;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.Marker;
 
 import com.municipalpolice.officerapp.R;
 import com.municipalpolice.officerapp.data.Callback;
@@ -50,11 +60,13 @@ public class MissionDetailActivity extends BaseActivity {
     private TextView tvMissionTitle;
     private TextView tvPriorityPill;
     private TextView tvAssignedBy;
-    private TextView tvMapDistance;
     private TextView tvAcknowledgedAt;
     private TextView tvStartedAt;
     private TextView tvPhotoProgress;
     private TextView tvStatusPill;
+
+    private MapView mapView;
+    private Marker missionMarker;
 
     private View groupOfflineNotice;
 
@@ -65,6 +77,8 @@ public class MissionDetailActivity extends BaseActivity {
     private String missionId;
     private Mission mission;
     private MissionRepository missionRepository;
+
+    private FusedLocationProviderClient fusedLocationClient;
 
     private NetworkMonitor networkMonitor;
 
@@ -95,17 +109,29 @@ public class MissionDetailActivity extends BaseActivity {
         tvMissionTitle = findViewById(R.id.tvMissionTitle);
         tvPriorityPill = findViewById(R.id.tvPriorityPill);
         tvAssignedBy = findViewById(R.id.tvAssignedBy);
-        tvMapDistance = findViewById(R.id.tvMapDistance);
         tvAcknowledgedAt = findViewById(R.id.tvAcknowledgedAt);
         tvStartedAt = findViewById(R.id.tvStartedAt);
         tvPhotoProgress = findViewById(R.id.tvPhotoProgress);
         tvStatusPill = findViewById(R.id.tvStatusPill);
+
+        Configuration.getInstance().setUserAgentValue(getPackageName());
+        Configuration.getInstance().load(
+                this,
+                android.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        );
+        mapView = findViewById(R.id.mapView);
+        mapView.setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK);
+        mapView.setBuiltInZoomControls(false);
+        mapView.setMultiTouchControls(true);
+        mapView.getController().setZoom(16.0);
 
         groupOfflineNotice = findViewById(R.id.groupOfflineNotice);
 
         photoSlot1 = findViewById(R.id.photoSlot1);
         photoSlot2 = findViewById(R.id.photoSlot2);
         photoSlot3 = findViewById(R.id.photoSlot3);
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         findViewById(R.id.btnBack)
                 .setOnClickListener(v -> finish());
@@ -354,12 +380,30 @@ public class MissionDetailActivity extends BaseActivity {
                 )
         );
 
-        tvMapDistance.setText(
-                getString(
-                        R.string.mission_map_distance,
-                        "--"
-                )
-        );
+        updateDistance();
+
+        if (mission.getLatitude() != null && mission.getLongitude() != null) {
+            GeoPoint missionPoint =
+                    new GeoPoint(
+                            mission.getLatitude(),
+                            mission.getLongitude()
+                    );
+
+            mapView.getController().setCenter(missionPoint);
+
+            if (missionMarker == null) {
+                missionMarker = new Marker(mapView);
+                mapView.getOverlays().add(missionMarker);
+            }
+
+            missionMarker.setPosition(missionPoint);
+            missionMarker.setTitle(mission.getTitle());
+            missionMarker.setAnchor(
+                    Marker.ANCHOR_CENTER,
+                    Marker.ANCHOR_BOTTOM
+            );
+            mapView.invalidate();
+        }
 
         int pillRes;
         String label;
@@ -511,34 +555,44 @@ public class MissionDetailActivity extends BaseActivity {
     }
 
     private void renderPhotos() {
+        // ... (end of method)
+    }
 
-        int taken =
-                mission.getPhotos().size();
+    private void updateDistance() {
 
-        tvPhotoProgress.setText(
-                getString(
-                        R.string.mission_photo_progress,
-                        taken,
-                        mission.getRequiredPhotoCount()
-                )
-        );
-
-        FrameLayout[] slots = {
-                photoSlot1,
-                photoSlot2,
-                photoSlot3
-        };
-
-        for (int i = 0;
-             i < slots.length;
-             i++) {
-
-            slots[i].setBackgroundResource(
-                    i < taken
-                            ? R.drawable.bg_map_preview
-                            : R.drawable.bg_photo_slot
-            );
+        if (mission == null
+                || mission.getLatitude() == null
+                || mission.getLongitude() == null) {
+            return;
         }
+
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+        ) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        fusedLocationClient
+                .getLastLocation()
+                .addOnSuccessListener(location -> {
+
+                    if (location != null) {
+
+                        float[] results = new float[1];
+
+                        android.location.Location.distanceBetween(
+                                location.getLatitude(),
+                                location.getLongitude(),
+                                mission.getLatitude(),
+                                mission.getLongitude(),
+                                results
+                        );
+
+                        float meters = results[0];
+                        // Distance label removed per user request
+                    }
+                });
     }
 
     private void acknowledgeMission() {
@@ -650,36 +704,91 @@ public class MissionDetailActivity extends BaseActivity {
 
     private void openNavigation() {
 
+        if (mission == null) {
+            return;
+        }
+
         try {
 
-            String query =
-                    mission.getAddress() != null
-                            ? mission.getAddress()
-                            : mission.getLatitude()
-                              + ","
-                              + mission.getLongitude();
+            Uri navigationUri;
 
-            Uri gmmIntentUri =
-                    Uri.parse(
-                            "geo:0,0?q="
-                                    + Uri.encode(query)
-                    );
+            if (mission.getLatitude() != null
+                    && mission.getLongitude() != null) {
+
+                navigationUri =
+                        Uri.parse(
+                                "google.navigation:q="
+                                        + mission.getLatitude()
+                                        + ","
+                                        + mission.getLongitude()
+                        );
+
+            } else if (mission.getAddress() != null) {
+
+                navigationUri =
+                        Uri.parse(
+                                "google.navigation:q="
+                                        + Uri.encode(
+                                        mission.getAddress()
+                                )
+                        );
+
+            } else {
+
+                Toast.makeText(
+                        this,
+                        "No location data available",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                return;
+            }
 
             Intent mapIntent =
                     new Intent(
                             Intent.ACTION_VIEW,
-                            gmmIntentUri
+                            navigationUri
                     );
 
-            startActivity(
-                    mapIntent
+            mapIntent.setPackage(
+                    "com.google.android.apps.maps"
             );
+
+            if (mapIntent.resolveActivity(
+                    getPackageManager()) != null) {
+
+                startActivity(mapIntent);
+
+            } else {
+
+                // Fallback to generic geo intent
+                String query =
+                        mission.getAddress() != null
+                                ? mission.getAddress()
+                                : mission.getLatitude()
+                                  + ","
+                                  + mission.getLongitude();
+
+                navigationUri =
+                        Uri.parse(
+                                "geo:0,0?q="
+                                        + Uri.encode(query)
+                        );
+
+                mapIntent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                navigationUri
+                        );
+
+                startActivity(mapIntent);
+            }
 
         } catch (Exception e) {
 
             Toast.makeText(
                     this,
-                    mission.getTitle(),
+                    "Could not open navigation",
                     Toast.LENGTH_SHORT
             ).show();
         }
@@ -915,6 +1024,22 @@ public class MissionDetailActivity extends BaseActivity {
         if (networkMonitor != null) {
             networkMonitor.start();
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mapView != null) {
+            mapView.onResume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (mapView != null) {
+            mapView.onPause();
+        }
+        super.onPause();
     }
 
     @Override

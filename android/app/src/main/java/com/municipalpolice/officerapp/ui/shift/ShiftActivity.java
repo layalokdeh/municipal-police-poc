@@ -147,6 +147,26 @@ public class ShiftActivity extends BaseActivity {
                 }
             };
 
+    private final Runnable syncTimeTick =
+            new Runnable() {
+
+                @Override
+                public void run() {
+
+                    if (onDuty
+                            && tvLastSynced != null
+                            && tvLastSynced.getVisibility() == View.VISIBLE) {
+
+                        updateLastSyncedText();
+                    }
+
+                    handler.postDelayed(
+                            this,
+                            60000
+                    );
+                }
+            };
+
     // ---------------------------------------------------------
     // PANIC
     // ---------------------------------------------------------
@@ -336,7 +356,11 @@ public class ShiftActivity extends BaseActivity {
 
         setUpPanicHoldButton();
 
-        renderOffDuty();
+        if (prefs.isShiftActive()) {
+            restoreShiftState();
+        } else {
+            renderOffDuty();
+        }
     }
 
     // ---------------------------------------------------------
@@ -394,35 +418,19 @@ public class ShiftActivity extends BaseActivity {
                         onDuty = true;
 
                         prefs.setShiftActive(true);
+                        prefs.setLastSyncTime(0);
 
-                        try {
+                        /*
+                         * Anchor the timer to the device's clock using the
+                         * duration returned by the server. This is more robust
+                         * against clock skew and timezone issues than parsing
+                         * the started_at timestamp.
+                         */
+                        shiftStartMillis =
+                                System.currentTimeMillis()
+                                        - (result.getDurationSeconds() * 1000L);
 
-                            java.text.SimpleDateFormat sdf =
-                                    new java.text.SimpleDateFormat(
-                                            "yyyy-MM-dd'T'HH:mm:ss",
-                                            java.util.Locale.US
-                                    );
-
-                            sdf.setTimeZone(
-                                    java.util.TimeZone
-                                            .getTimeZone("UTC")
-                            );
-
-                            java.util.Date date =
-                                    sdf.parse(
-                                            result.getStartedAt()
-                                    );
-
-                            shiftStartMillis =
-                                    date != null
-                                            ? date.getTime()
-                                            : System.currentTimeMillis();
-
-                        } catch (Exception e) {
-
-                            shiftStartMillis =
-                                    System.currentTimeMillis();
-                        }
+                        prefs.setShiftStartTime(shiftStartMillis);
 
                         handler.removeCallbacks(
                                 timerTick
@@ -430,6 +438,10 @@ public class ShiftActivity extends BaseActivity {
 
                         handler.post(
                                 timerTick
+                        );
+
+                        handler.post(
+                                syncTimeTick
                         );
 
                         startLocationTrackingIfAllowed();
@@ -571,6 +583,7 @@ public class ShiftActivity extends BaseActivity {
         );
 
         updatePendingCount();
+        updateLastSyncedText();
     }
 
     // ---------------------------------------------------------
@@ -602,6 +615,43 @@ public class ShiftActivity extends BaseActivity {
     // ---------------------------------------------------------
     // ROOM PENDING COUNT
     // ---------------------------------------------------------
+
+    private void updateLastSyncedText() {
+
+        long lastSync =
+                prefs.getLastSyncTime();
+
+        if (lastSync == 0) {
+
+            tvLastSynced.setText(
+                    R.string.shift_not_synced_yet
+            );
+
+            return;
+        }
+
+        long now =
+                System.currentTimeMillis();
+
+        /*
+         * Use Android's DateUtils for localized relative time
+         * (e.g. "5 minutes ago", "Just now", etc.)
+         */
+        CharSequence relativeTime =
+                android.text.format.DateUtils.getRelativeTimeSpanString(
+                        lastSync,
+                        now,
+                        android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                        android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
+                );
+
+        tvLastSynced.setText(
+                getString(
+                        R.string.shift_last_synced,
+                        relativeTime
+                )
+        );
+    }
 
     private void updatePendingCount() {
 
@@ -692,6 +742,14 @@ public class ShiftActivity extends BaseActivity {
                             }
 
                             /*
+                             * Record this successful sync for the "X minutes ago"
+                             * label used on the offline screen.
+                             */
+                            prefs.setLastSyncTime(
+                                    System.currentTimeMillis()
+                            );
+
+                            /*
                              * Check whether another batch remains.
                              */
                             handleNetworkAvailable();
@@ -759,6 +817,7 @@ public class ShiftActivity extends BaseActivity {
                                 setOnlineStatusPill();
 
                                 updatePendingCount();
+                                updateLastSyncedText();
 
                                 Toast.makeText(
                                         ShiftActivity.this,
@@ -914,9 +973,15 @@ public class ShiftActivity extends BaseActivity {
                         syncing = false;
 
                         prefs.setShiftActive(false);
+                        prefs.setShiftStartTime(0);
+                        prefs.setLastSyncTime(0);
 
                         handler.removeCallbacks(
                                 timerTick
+                        );
+
+                        handler.removeCallbacks(
+                                syncTimeTick
                         );
 
                         if (locationTracker != null) {
@@ -957,6 +1022,7 @@ public class ShiftActivity extends BaseActivity {
                 }
         );
     }
+
 
     // ---------------------------------------------------------
     // PANIC
@@ -1007,6 +1073,33 @@ public class ShiftActivity extends BaseActivity {
     // ---------------------------------------------------------
     // OFF DUTY
     // ---------------------------------------------------------
+
+    private void restoreShiftState() {
+
+        onDuty = true;
+        shiftStartMillis = prefs.getShiftStartTime();
+
+        handler.removeCallbacks(timerTick);
+        handler.post(timerTick);
+
+        handler.removeCallbacks(syncTimeTick);
+        handler.post(syncTimeTick);
+
+        startLocationTrackingIfAllowed();
+
+        /*
+         * Default to the basic ON DUTY page.
+         * NetworkMonitor will soon trigger showOnlineState()
+         * or showOfflineState() based on real connectivity.
+         */
+        flipper.setDisplayedChild(PAGE_ON_DUTY);
+
+        if (backendReachable) {
+            setOnlineStatusPill();
+        } else {
+            setOfflineStatusPill();
+        }
+    }
 
     private void renderOffDuty() {
 

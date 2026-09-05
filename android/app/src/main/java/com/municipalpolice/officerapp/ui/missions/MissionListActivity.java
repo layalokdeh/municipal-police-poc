@@ -137,11 +137,14 @@ public class MissionListActivity extends BaseActivity {
 
                                     /*
                                      * If Django has just returned,
+                                     * or this is the first time we've verified signal,
                                      * reload missions automatically.
                                      */
                                     if (wasOffline
                                             || flipper.getDisplayedChild()
-                                            == PAGE_ERROR) {
+                                            == PAGE_ERROR
+                                            || flipper.getDisplayedChild()
+                                            == PAGE_LOADING) {
 
                                         loadMissions();
                                     }
@@ -522,6 +525,11 @@ public class MissionListActivity extends BaseActivity {
 
                         flipper.getDisplayedChild()
                                 == PAGE_EMPTY
+
+                        ||
+
+                        flipper.getDisplayedChild()
+                                == PAGE_LOADING
         )) {
 
             loadMissions();

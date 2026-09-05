@@ -21,7 +21,8 @@
     <string name="shift_missions_button">Missions</string>
     <string name="shift_panic_button">Hold 2 seconds for panic</string>
     <string name="shift_end_button">End shift</string>
-    <string name="shift_last_synced">Last synced %1$s ago</string>
+    <string name="shift_last_synced">Last synced %1$s</string>
+    <string name="shift_not_synced_yet">Not synced yet in this shift</string>
     <string name="shift_saved_on_phone">Saved on this phone</string>
     <string name="shift_saved_detail">%1$d locations and %2$d photos will upload when signal returns.</string>
     <string name="shift_uploading_title">Uploading saved work</string>
